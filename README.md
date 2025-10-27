@@ -5,6 +5,37 @@ The app demonstrates domain modeling for animals and feed, separation of concern
 operations, structured logging (including correlation IDs for feeding sessions), and a compact stored-procedure report for recent feeding statistics. The project is scoped so each 
 week implements one clear concept and produces testable, reviewable deliverables suitable for GitHub submission.
 
+Migration & Evidence (Week 10 deliverable)
+------------------------------------------
+
+This repository now includes the minimal domain model and a corresponding initial EF Core migration to support upcoming Razor Pages work.
+
+What I added
+- Lightweight POCO entity classes: `Stingray`, `Fish`, `FeedBatch`, `Caretaker`. These complement the already-present `FeedEvent` and match the `DbSet<T>` entries exposed by `ApplicationDbContext`.
+- An EF Core migration file `Migrations/20251027223400_InitialCreate.cs` that creates the tables and foreign key relationships required for feed tracking.
+
+Why this is minimal
+The goal was to provide a stable, normalized surface for CRUD pages and service logic in later weeks. `FeedBatch` separates inventory (batches of fish/feed) from `FeedEvent` which records consumption; this keeps historical usage and inventory separate and simplifies reporting & auditing.
+
+How to reproduce locally
+1. Ensure packages are installed: `Microsoft.EntityFrameworkCore.SqlServer`, `Microsoft.EntityFrameworkCore.Design`. Optionally install `dotnet-ef` globally.
+2. From the project folder containing `ApplicationDbContext` run:
+   - `dotnet ef migrations add InitialCreate --context ApplicationDbContext`
+   - `dotnet ef database update --context ApplicationDbContext`
+If you already have the migration file in `Migrations/` you can skip the first step and run only `dotnet ef database update`.
+
+Evidence to include in your GitHub submission
+- Commit containing the model classes, `ApplicationDbContext` registration, and `Migrations/*`. Example commit message: "Add minimal domain models and initial EF migration".
+- Artifacts directory with the following screenshots:
+  - Terminal output showing `dotnet ef migrations add InitialCreate` (or PMC output).
+  - Terminal output showing `dotnet ef database update`.
+  - SQL Server Object Explorer / DB browser screenshot showing created tables (`Fish`, `FeedBatches`, `Stingrays`, `Caretakers`, `FeedEvents`).
+- A brief explanation (this section) explaining why the model is shaped this way and what the migration created.
+
+Next steps
+- Add seed data (in `DbInitializer` or `DbContext.OnModelCreating`) if you want reproducible demo data.
+- Scaffold Razor Pages for `FeedEvent` and `Fish` to demonstrate CRUD and inventory behavior.
+
 Planning table (Weeks 10–15)
 
 | Week | Concept | Feature | Goal / Objective | Done checklist | Documentation / Evidence (what I will provide) | How I'll test |
