@@ -5,26 +5,25 @@ The app demonstrates domain modeling for animals and feed, separation of concern
 operations, structured logging (including correlation IDs for feeding sessions), and a compact stored-procedure report for recent feeding statistics. The project is scoped so each 
 week implements one clear concept and produces testable, reviewable deliverables suitable for GitHub submission.
 
-Migration & Evidence (Week 10 deliverable)
-------------------------------------------
+## Migration & Evidence (Week 10 deliverable)
 
 This repository now includes the minimal domain model and a corresponding initial EF Core migration to support upcoming Razor Pages work.
 
-What I added
+### What I added
 - Lightweight POCO entity classes: `Stingray`, `Fish`, `FeedBatch`, `Caretaker`. These complement the already-present `FeedEvent` and match the `DbSet<T>` entries exposed by `ApplicationDbContext`.
 - An EF Core migration file `Migrations/20251027223400_InitialCreate.cs` that creates the tables and foreign key relationships required for feed tracking.
 
-Why this is minimal
+### Why this is minimal
 The goal was to provide a stable, normalized surface for CRUD pages and service logic in later weeks. `FeedBatch` separates inventory (batches of fish/feed) from `FeedEvent` which records consumption; this keeps historical usage and inventory separate and simplifies reporting & auditing.
 
-How to reproduce locally
+### How to reproduce locally
 1. Ensure packages are installed: `Microsoft.EntityFrameworkCore.SqlServer`, `Microsoft.EntityFrameworkCore.Design`. Optionally install `dotnet-ef` globally.
 2. From the project folder containing `ApplicationDbContext` run:
    - `dotnet ef migrations add InitialCreate --context ApplicationDbContext`
    - `dotnet ef database update --context ApplicationDbContext`
 If you already have the migration file in `Migrations/` you can skip the first step and run only `dotnet ef database update`.
 
-Evidence to include in your GitHub submission
+### Evidence to include in your GitHub submission
 - Commit containing the model classes, `ApplicationDbContext` registration, and `Migrations/*`. Example commit message: "Add minimal domain models and initial EF migration".
 - Artifacts directory with the following screenshots:
   - Terminal output showing `dotnet ef migrations add InitialCreate` (or PMC output).
@@ -32,11 +31,11 @@ Evidence to include in your GitHub submission
   - SQL Server Object Explorer / DB browser screenshot showing created tables (`Fish`, `FeedBatches`, `Stingrays`, `Caretakers`, `FeedEvents`).
 - A brief explanation (this section) explaining why the model is shaped this way and what the migration created.
 
-Next steps
+### Next steps
 - Add seed data (in `DbInitializer` or `DbContext.OnModelCreating`) if you want reproducible demo data.
 - Scaffold Razor Pages for `FeedEvent` and `Fish` to demonstrate CRUD and inventory behavior.
 
-Planning table (Weeks 10–15)
+## Planning table (Weeks 10–15)
 
 | Week | Concept | Feature | Goal / Objective | Done checklist | Documentation / Evidence (what I will provide) | How I'll test |
 |---:|---|---|---|---|---|---|
@@ -47,7 +46,44 @@ Planning table (Weeks 10–15)
 | Week 14 | Logging | Structured logging (Serilog), correlation IDs per feeding session, and log enrichment | Implement structured logs for traceability: every feed event gets a correlation ID; logs include `StingrayId`, `FishId`, `FeedBatchId`, and user/caretaker where available. Export logs to file and optionally Seq. | - Serilog bootstrap in `Program.cs` and `appsettings.json` sinks<br/>- Correlation ID middleware that attaches `X-Correlation-ID` to feed requests<br/>- Ensure key operations log structured JSON entries | Commit logging configuration, middleware, and example log files (JSON). README will include a 200+ word write-up with sample log entries and explanation of retention and search strategies. | - Perform feed events and verify logs contain structured fields and correlation ID.<br/>- Search sample log file for event types (create/edit/delete feed). |
 | Week 15 | Stored Procedures | Stored-procedure report `GetRecentFeedSummaryByStingray` invoked from EF Core or Dapper | Provide a lightweight stored-procedure-backed report that returns recent feeding stats per stingray (last 7 days): items fed, total mass, last fed timestamp. Keep scope small due to holiday week. | - SQL script to create `GetRecentFeedSummaryByStingray` (read-only)<br/>- Repository method calling the proc (`FromSqlRaw` or Dapper) and `Pages/Reports/RecentFeed` page<br/>- Integration test executing proc against test DB | Commit SQL script, repository proc call, report page, and a 200+ word README write-up explaining trade-offs for stored procs in reporting scenarios with a sample output screenshot. | - Run SQL script to create proc, seed data, visit `/Reports/RecentFeed` and validate results.<br/>- Integration test asserting expected aggregated values from the stored proc. |
 
-Deliverables and workflow notes
+## Week 11 — Separation of Concerns & Dependency Injection
+
+For Week 11 I implemented a small service layer to move non-UI business logic out of controllers and into a testable, injectable service. The new interface and implementation are `Services/IFeedingService.cs` and `Services/FeedingService.cs`. The service encapsulates business rules for recording feed events (applying sensible defaults such as assigning a correlation id and UTC event time) and querying recent feed events.
+
+### Registration and lifetime
+
+- The service is registered in `Program.cs` using `builder.Services.AddScoped<IFeedingService, FeedingService>();`.
+- `Scoped` is chosen intentionally because `FeedingService` depends on `AppDbContext`, which is registered as scoped; matching lifetimes avoids capturing a shorter-lived dependency from a longer-lived service and is the recommended pattern for services that use EF Core.
+
+### Controller usage
+
+- Controllers (and Razor Page models) are kept thin. `Controllers/FeederController.cs` (the API controller) receives `IFeedingService` via constructor injection and delegates work to it in both the `GetRecent` (reads recent feed events) and `Post` (records a new feed event) actions.
+- The service performs defaults, persistence, and logging; the controller only validates the request and returns appropriate HTTP responses.
+
+### How to validate locally (evidence)
+
+1. Run the app: `dotnet run` from the project folder.
+2. Ensure DB is migrated (the app applies `Database.Migrate()` in development).
+3. Test the read endpoint:
+   - `curl "http://localhost:5000/api/feeding/recent?max=5"`
+4. Test the post endpoint:
+   - `curl -X POST -H "Content-Type: application/json" -d "{\"StingrayId\":1,\"FishId\":1,\"Quantity\":3}" http://localhost:5000/api/feeding`
+5. Capture screenshots of terminal output, the JSON response, and the database (SQL Server Object Explorer) showing the newly added `FeedEvents` row — include these in your GitHub submission as evidence.
+
+### Design notes
+
+- Keeping business rules in a service improves testability (unit tests can mock `IFeedingService` or test `FeedingService` with an in-memory or test database), reduces duplication across pages/controllers, and makes it straightforward to add cross-cutting behaviors (metrics, retry, validation) in one place.
+
+### Files changed/added
+
+- `Services/IFeedingService.cs` (interface)
+- `Services/FeedingService.cs` (implementation)
+- `Program.cs` (service registration)
+- `Controllers/FeederController.cs` (uses the service)
+
+This section documents the feature and should be committed alongside screenshots and logs as described above.
+
+## Deliverables and workflow notes
 - The project will target `.NET 9` and use `Razor Pages` patterns. Key paths: `Program.cs`, `appsettings.json`, `Pages/*`, `Data/AppDbContext.cs`, `Services/*`, and `Migrations/*`.
 - Each weekly feature will be developed in feature branches (`week10-modeling`, `week11-di`, etc.) and merged to `main` after tests pass.
 - For each completed feature I will provide:
