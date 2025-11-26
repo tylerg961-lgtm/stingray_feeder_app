@@ -1,0 +1,36 @@
+@page
+@model stingray_feeder_app.Pages.Caretakers.IndexModel
+@{
+    ViewData["Title"] = "Caretakers";
+}
+
+<h1>Caretakers</h1>
+
+<p>
+    <a class="btn btn-primary" asp-page="./Create">Create New</a>
+</p>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var c in Model.Caretakers)
+{
+        <tr>
+            <td>@c.Name</td>
+            <td>@c.Email</td>
+            <td>@c.Phone</td>
+            <td>
+                <a asp-page="./Details" asp-route-id="@c.Id">Details</a> |
+                <a asp-page="./Edit" asp-route-id="@c.Id">Edit</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

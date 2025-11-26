@@ -1,0 +1,26 @@
+@page "{id:int}"
+@model stingray_feeder_app.Pages.Caretakers.DetailsModel
+@{
+    ViewData["Title"] = "Caretaker details";
+}
+
+<h1>Caretaker details</h1>
+
+<div>
+    <dl class="row">
+        <dt class="col-sm-2">Name</dt>
+        <dd class="col-sm-10">@Model.Caretaker?.Name</dd>
+
+        <dt class="col-sm-2">Email</dt>
+        <dd class="col-sm-10">@Model.Caretaker?.Email</dd>
+
+        <dt class="col-sm-2">Phone</dt>
+        <dd class="col-sm-10">@Model.Caretaker?.Phone</dd>
+
+        <dt class="col-sm-2">Notes</dt>
+        <dd class="col-sm-10">@Model.Caretaker?.Notes</dd>
+    </dl>
+
+    <a class="btn btn-secondary" asp-page="./Index">Back to list</a>
+    <a class="btn btn-primary" asp-page="./Edit" asp-route-id="@Model.Caretaker?.Id">Edit</a>
+</div>

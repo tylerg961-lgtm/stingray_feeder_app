@@ -41,7 +41,7 @@ If you already have the migration file in `Migrations/` you can skip the first s
 |---:|---|---|---|---|---|---|
 | Week 10 | Modeling | Domain model and `AppDbContext` for `Stingray`, `Fish`, `FeedEvent`, `FeedBatch` | Create the core domain: represent stingrays, fish inventory (species, size, source), feed events linking stingrays to fish batches and timestamps. Ensure relationships, constraints, and basic indexes so data supports monitoring and reporting. | - POCOs: `Stingray`, `Fish`, `FeedEvent`, `FeedBatch` with navigation props<br/>- `Data/AppDbContext.cs` with `DbSet<>`s and fluent mappings where needed<br/>- Initial EF Core migration and local DB seed script | Code committed to GitHub: model classes, `AppDbContext`, migration files, a SQL schema snapshot. I will add a 200+ word write-up in this `README.md` describing modeling decisions (why separate `FeedBatch` from `FeedEvent`, normalization, key choices) and include an ER diagram or PlantUML screenshot. | - Run `dotnet ef migrations add Initial` and `dotnet ef database update` against SQLite or LocalDB and inspect schema.<br/>- Unit tests verifying required fields, FK behavior, and expected navigation loading. |
 | Week 11 | Separation of Concerns / Dependency Injection | Repository and service layers for feeding operations and fish inventory | Keep UI thin: `Pages` depend on service interfaces not EF Core directly. Provide `IFeedService`, `IFishRepository` to encapsulate business rules (e.g., decrement inventory when used). Register services in DI with appropriate lifetimes. | - Define interfaces (`IFeedService`, `IFishRepository`) and concrete implementations<br/>- Register services in `Program.cs` with `builder.Services.AddScoped<>`<br/>- Unit tests using mocks to validate service logic (inventory decrements, validation) | Commit interfaces, implementations, and updated `Program.cs`. README will include a 200+ word write-up explaining DI choices, lifetimes (`Scoped` for DbContext services), and a small diagram showing layers. | - Run unit tests with mocked repositories (Moq) to verify behavior without DB.<br/>- Start the app and confirm pages receive services via constructor injection. |
-| Week 12 | CRUD | Razor Pages CRUD for `FeedEvent` and `Fish` with validation and inventory rules | Provide full Create/Read/Update/Delete flows: add fish to inventory, log feed events (select stingray + fish batch + quantity), validate available inventory, show feeding history per stingray. | - Razor Pages: `Pages/Fish/*`, `Pages/FeedEvents/*`, `Pages/Stingrays/*` (`Index`, `Details`, `Create`, `Edit`, `Delete`)<br/>- Server-side validation and antiforgery protection<br/>- Integration tests using in-memory DB provider | Commit all Razor Pages and `PageModel` code. README will include a 200+ word feature write-up and screenshots showing create form, validation, and feeding history per animal. | - Manual tests: create fish entries, perform feed event (inventory reduces), edit/delete flows.<br/>- Integration tests against in-memory provider asserting CRUD and inventory integrity. |
+| Week 12 | CRUD | Razor Pages CRUD for `FeedEvent`, `Fish`, and `Caretakers` with validation and inventory rules | Provide full Create/Read/Update/Delete flows: add fish to inventory, log feed events (select stingray + fish batch + quantity), validate available inventory, show feeding history per stingray. | - Razor Pages: `Pages/Fish/*`, `Pages/FeedEvents/*`, `Pages/Caretakers/*` (`Index`, `Details`, `Create`, `Edit`, `Delete`)<br/>- Server-side validation and antiforgery protection<br/>- Integration tests using in-memory DB provider | Commit all Razor Pages and `PageModel` code. README will include a 200+ word feature write-up and screenshots showing create form, validation, and feeding history per animal. | - Manual tests: create fish entries, perform feed event (inventory reduces), edit/delete flows.<br/>- Integration tests against in-memory provider asserting CRUD and inventory integrity. |
 | Week 13 | Diagnostics | Health checks, metrics for recent feed rates, request timing middleware | Add health checks and a diagnostics page showing recent feed throughput, average feed session durations, and recent errors to help caretakers and maintainers quickly assess system health. | - Configure `Microsoft.Extensions.Diagnostics.HealthChecks` and `/health` endpoint<br/>- Add middleware capturing request durations and feed-operation latencies<br/>- Add `/Diagnostics` Razor Page summarizing recent metrics | Commit health check config, middleware, and diagnostics page. README will include a 200+ word write-up describing diagnostic metrics, endpoint examples, and screenshots of the diagnostics page. | - Call `/health` to validate healthy/unhealthy toggles.<br/>- Generate feed events and verify metrics appear on `/Diagnostics`.<br/>- Tests for middleware timing logic. |
 | Week 14 | Logging | Structured logging (Serilog), correlation IDs per feeding session, and log enrichment | Implement structured logs for traceability: every feed event gets a correlation ID; logs include `StingrayId`, `FishId`, `FeedBatchId`, and user/caretaker where available. Export logs to file and optionally Seq. | - Serilog bootstrap in `Program.cs` and `appsettings.json` sinks<br/>- Correlation ID middleware that attaches `X-Correlation-ID` to feed requests<br/>- Ensure key operations log structured JSON entries | Commit logging configuration, middleware, and example log files (JSON). README will include a 200+ word write-up with sample log entries and explanation of retention and search strategies. | - Perform feed events and verify logs contain structured fields and correlation ID.<br/>- Search sample log file for event types (create/edit/delete feed). |
 | Week 15 | Stored Procedures | Stored-procedure report `GetRecentFeedSummaryByStingray` invoked from EF Core or Dapper | Provide a lightweight stored-procedure-backed report that returns recent feeding stats per stingray (last 7 days): items fed, total mass, last fed timestamp. Keep scope small due to holiday week. | - SQL script to create `GetRecentFeedSummaryByStingray` (read-only)<br/>- Repository method calling the proc (`FromSqlRaw` or Dapper) and `Pages/Reports/RecentFeed` page<br/>- Integration test executing proc against test DB | Commit SQL script, repository proc call, report page, and a 200+ word README write-up explaining trade-offs for stored procs in reporting scenarios with a sample output screenshot. | - Run SQL script to create proc, seed data, visit `/Reports/RecentFeed` and validate results.<br/>- Integration test asserting expected aggregated values from the stored proc. |
@@ -83,12 +83,46 @@ For Week 11 I implemented a small service layer to move non-UI business logic ou
 
 This section documents the feature and should be committed alongside screenshots and logs as described above.
 
+## Week 12 — CRUD vertical slice
+
+This section documents the Week 12 deliverable: an end-to-end vertical slice implementing CRUD for the `Caretakers` feature in this Razor Pages application. The implemented pages are:
+
+- `Pages/Caretakers/Index` — lists caretakers using asynchronous EF Core reads (`ToListAsync`, `AsNoTracking`) and displays Create/Details/Edit links.
+- `Pages/Caretakers/Details` — shows a single caretaker using `FirstOrDefaultAsync`/`AsNoTracking`.
+- `Pages/Caretakers/Create` — provides a form to add a caretaker; the handler uses `Add` and `SaveChangesAsync` and returns validation feedback on errors.
+- `Pages/Caretakers/Edit` — loads by `FindAsync`, updates the entity, and uses `SaveChangesAsync` with concurrency and general save error handling.
+
+### Key implementation notes
+
+- All database access is asynchronous (e.g., `ToListAsync`, `FindAsync`, `SaveChangesAsync`, `AnyAsync`) to keep the request thread unblocked and follow modern EF Core best practices.
+- Validation is enforced via data annotations on the page input models (`[Required]`, `[StringLength]`, `[EmailAddress]`) and surfaced back to the user with `asp-validation-summary`, `asp-validation-for`, and the `_ValidationScriptsPartial` for client-side unobtrusive validation.
+- Error handling captures `DbUpdateConcurrencyException` and `DbUpdateException`, returning friendly messages and keeping the user on the form to correct issues.
+
+### How to run and verify
+
+1. Ensure the project is configured and the database is available. If using migrations, run:
+   ```bash
+   dotnet ef database update
+   ```
+2. Run the app from Visual Studio (__Debug > Start Debugging__) or with CLI:
+   ```bash
+   dotnet run
+   ```
+3. Browse to `/Caretakers`.
+- Use Create to add a caretaker (test validation by submitting empty required fields and invalid email formats).
+- Click Details for any record to view it.
+- Edit a record and attempt concurrent edits from two browsers to see concurrency handling.
+
+### Evidence / Git history
+
+Commits implementing this feature are present in the repository on the `master` branch. Check the Git log or the remote on GitHub for the Week 12 CRUD changes and README update for verification.
+
 ## Deliverables and workflow notes
 - The project will target `.NET 9` and use `Razor Pages` patterns. Key paths: `Program.cs`, `appsettings.json`, `Pages/*`, `Data/AppDbContext.cs`, `Services/*`, and `Migrations/*`.
 - Each weekly feature will be developed in feature branches (`week10-modeling`, `week11-di`, etc.) and merged to `main` after tests pass.
 - For each completed feature I will provide:
-  - Source code in the repository (models, services, pages, middleware, tests).
-  - A 200+ word write-up in this `README.md` for that feature describing design decisions, trade-offs, and evidence (plus screenshots, logs, or ER diagrams as appropriate).
-  - Automated tests (unit / integration) demonstrating correctness.
+- Source code in the repository (models, services, pages, middleware, tests).
+- A200+ word write-up in this `README.md` for that feature describing design decisions, trade-offs, and evidence (plus screenshots, logs, or ER diagrams as appropriate).
+- Automated tests (unit / integration) demonstrating correctness.
 
 
