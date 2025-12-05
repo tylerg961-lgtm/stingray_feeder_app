@@ -117,12 +117,67 @@ This section documents the Week 12 deliverable: an end-to-end vertical slice imp
 
 Commits implementing this feature are present in the repository on the `master` branch. Check the Git log or the remote on GitHub for the Week 12 CRUD changes and README update for verification.
 
+## Week 13 — Diagnostics
+
+This section documents the Diagnostics work added for Week 13: a lightweight health endpoint that performs real dependency checks so operators and automated systems can verify application health.
+
+### What was added
+
+- A new health endpoint at `/healthz` that returns a concise JSON payload describing overall status and per-dependency results.
+- The endpoint performs a real dependency check against the primary application database (the EF Core `AppDbContext`). It uses `Database.CanConnectAsync()` to verify connectivity and measures the call latency.
+
+### Why this approach
+
+The goal was to provide an operationally useful check without exposing sensitive configuration or data. A database connectivity check is a high-value indicator: if the app cannot reach its primary data store, many application features will fail. Using `Database.CanConnectAsync()` keeps the check simple and reliable across SQL Server and other EF Core providers.
+
+### Response format
+
+The endpoint returns a JSON object similar to:
+
+```json
+{
+  "status": "Healthy|Unhealthy",
+  "checks": {
+    "database": {
+      "status": "Healthy|Unhealthy",
+      "details": "short diagnostic message (no secrets)",
+      "elapsedMs": 12
+    }
+  },
+  "timestamp": "2025-12-05T...Z"
+}
+```
+
+- HTTP 200 is returned when overall status is `Healthy`.
+- HTTP 503 is returned when overall status is `Unhealthy` so orchestrators (k8s, load balancers) will treat the instance as unavailable.
+
+### Security and operational notes
+
+- The endpoint exposes only non-sensitive diagnostic information (connection status, short error messages, and elapsed time). It deliberately omits connection strings, credentials, or any sensitive internals.
+- Consider restricting access to `/healthz` in production via network controls or application-level authorization if your operational policy requires it.
+
+### How to test locally
+
+1. Start the application in Development (Visual Studio or `dotnet run`).
+2. Ensure the configured database is available or accept the default local development DB created by EF migrations.
+3. Browse to `https://localhost:{port}/healthz` or use `curl`:
+
+   ```bash
+   curl -sS https://localhost:{port}/healthz | jq
+   ```
+
+### Expected artifacts
+
+- Code changes: `Program.cs` (health endpoint implementation). 
+- Documentation: this README section under `Week 13 — Diagnostics`.
+
+
 ## Deliverables and workflow notes
 - The project will target `.NET 9` and use `Razor Pages` patterns. Key paths: `Program.cs`, `appsettings.json`, `Pages/*`, `Data/AppDbContext.cs`, `Services/*`, and `Migrations/*`.
 - Each weekly feature will be developed in feature branches (`week10-modeling`, `week11-di`, etc.) and merged to `main` after tests pass.
 - For each completed feature I will provide:
 - Source code in the repository (models, services, pages, middleware, tests).
-- A200+ word write-up in this `README.md` for that feature describing design decisions, trade-offs, and evidence (plus screenshots, logs, or ER diagrams as appropriate).
+- A 200+ word write-up in this `README.md` for that feature describing design decisions, trade-offs, and evidence (plus screenshots, logs, or ER diagrams as appropriate).
 - Automated tests (unit / integration) demonstrating correctness.
 
 
