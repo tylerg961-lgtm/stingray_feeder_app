@@ -13,6 +13,9 @@ namespace StingrayFeeder.Data
         public DbSet<FeedEvent> FeedEvents { get; set; } = null!;
         public DbSet<Caretaker> Caretakers { get; set; } = null!; // newly added
 
+        // Keyless mapping to support stored-proc result
+        public DbSet<FeedSummary> FeedSummaries { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // Stingray
@@ -78,6 +81,14 @@ namespace StingrayFeeder.Data
                  .OnDelete(DeleteBehavior.SetNull);
 
                 b.HasIndex(fe => fe.EventTime);
+            });
+
+            // Keyless entity mapping for stored-proc results
+            modelBuilder.Entity<FeedSummary>(b =>
+            {
+                b.HasNoKey();
+                b.ToView(null); // not mapped to a database view/table
+                b.Property(fs => fs.StingrayName).HasMaxLength(100);
             });
 
             // Basic seed data for local dev/testing

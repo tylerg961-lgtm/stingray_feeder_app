@@ -1,4 +1,4 @@
-# StingrayFeeder — Razor Pages Stingray Feeding & Fish Monitoring (target: .NET 9)
+    # StingrayFeeder — Razor Pages Stingray Feeding & Fish Monitoring (target: .NET 9)
 
 StingrayFeeder is a focused Razor Pages web application (targeting `.NET 9`) for managing feeding operations for captive stingrays and monitoring the fish that are fed to them. 
 The app demonstrates domain modeling for animals and feed, separation of concerns via DI, full CRUD for feeding records and fish inventory, diagnostics and health checks for reliable 
@@ -214,6 +214,33 @@ Recorded feed event completed. RequestId={RequestId} CorrelationId={CorrelationI
 - Logs are structured (message templates with named properties) so they are compatible with structured logging sinks.
 - The Correlation ID is set when a FeedEvent is created if the caller does not provide one. This keeps logs traceable even when clients omit the field.
 - Add screenshots of console output or your logging system’s query results to this README section when submitting the assignment.
+
+## Week 15 — Stored Procedures Feature
+
+This section documents the Stored Procedures feature implemented for Week 15. The project now includes a SQL script that creates a stored procedure, server-side code that executes the procedure safely via Entity Framework Core, and a Razor Page that renders the result so you can verify behavior in the running app.
+
+### What was added
+
+- `sql/Create_GetFeedSummary.sql` — SQL script to create the `dbo.GetFeedSummary` stored procedure. The procedure accepts `@StartDate`, `@EndDate`, and an optional `@MinQuantity` parameter and returns, per stingray, the total fed quantity and the most recent feed time between the supplied dates.
+
+- `Data/Models/FeedSummary.cs` — a small DTO/keyless model used to map the stored-proc result set.
+
+- `Data/AppDbContext.cs` — the DbContext now includes a `DbSet<FeedSummary>` and maps it as keyless so EF Core can materialize results.
+
+- `Pages/Reports/StoredProcedures.cshtml` and `Pages/Reports/StoredProcedures.cshtml.cs` — a Razor Page to invoke the stored procedure (via parameterized EF Core SQL) and render the results in a simple table.
+
+### How it works
+
+The app calls the stored procedure through EF Core using `FromSqlInterpolated` which ensures parameterization and prevents SQL injection. The mapping uses a keyless entity (`FeedSummary`) so EF Core can return non-entity result shapes. The Razor Page exposes three inputs (start date, end date, min quantity) and shows the feed summary per stingray.
+
+### How to apply locally
+
+1. Ensure your database is created and migrations have been applied: run `dotnet ef database update` or use Visual Studio -> __Package Manager Console__ and run `Update-Database`.
+
+2. Run the SQL script located at `sql/Create_GetFeedSummary.sql` against the same database. You can use __SQL Server Object Explorer__ inside Visual Studio or open the script in SQL Server Management Studio (SSMS) and execute it.
+
+3. Start the application and navigate to `/Reports/StoredProcedures` in your browser. Set the dates (defaults cover the last 7 days) and click "Run" to see results.
+
 
 
 

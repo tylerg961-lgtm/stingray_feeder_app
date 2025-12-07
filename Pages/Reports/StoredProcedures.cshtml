@@ -1,0 +1,52 @@
+@page
+@model stingray_feeder_app.Pages.Reports.StoredProceduresModel
+@{
+    ViewData["Title"] = "Stored Procedure Report";
+}
+
+<h1>Stored Procedure: Feed Summary</h1>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-auto">
+        <label class="form-label">Start</label>
+        <input asp-for="StartDate" class="form-control" type="date" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">End</label>
+        <input asp-for="EndDate" class="form-control" type="date" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Min Quantity</label>
+        <input asp-for="MinQuantity" class="form-control" type="number" min="0" />
+    </div>
+    <div class="col-auto align-self-end">
+        <button type="submit" class="btn btn-primary">Run</button>
+    </div>
+</form>
+
+@if (Model.Results?.Count > 0)
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Stingray</th>
+                <th>Total Quantity</th>
+                <th>Last Feed</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var r in Model.Results)
+        {
+            <tr>
+                <td>@r.StingrayName</td>
+                <td>@r.TotalQuantity</td>
+                <td>@(r.LastFeedTime?.ToString("u") ?? "-")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+else
+{
+    <div class="alert alert-info">No results for the selected range.</div>
+}
