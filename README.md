@@ -171,13 +171,49 @@ The endpoint returns a JSON object similar to:
 - Code changes: `Program.cs` (health endpoint implementation). 
 - Documentation: this README section under `Week 13 — Diagnostics`.
 
+## Week 14 — Logging Feature
 
-## Deliverables and workflow notes
-- The project will target `.NET 9` and use `Razor Pages` patterns. Key paths: `Program.cs`, `appsettings.json`, `Pages/*`, `Data/AppDbContext.cs`, `Services/*`, and `Migrations/*`.
-- Each weekly feature will be developed in feature branches (`week10-modeling`, `week11-di`, etc.) and merged to `main` after tests pass.
-- For each completed feature I will provide:
-- Source code in the repository (models, services, pages, middleware, tests).
-- A 200+ word write-up in this `README.md` for that feature describing design decisions, trade-offs, and evidence (plus screenshots, logs, or ER diagrams as appropriate).
-- Automated tests (unit / integration) demonstrating correctness.
+This section documents the Week 14 logging work added to the project. The goal was to add structured, actionable logs to a key application path (recording a feeding event) and to ensure at least one success and one error path are logged with useful contextual fields. The following changes were implemented in code (see modified files listed below) and produce logs suitable for local console, file, or centralized logging systems (Application Insights, Seq, etc.).
+
+### What was logged
+
+- Request ID: `HttpContext.TraceIdentifier` — useful for correlating logs for a single HTTP request.
+- Correlation ID: `FeedEvent.CorrelationId` — a domain-level identifier that follows the FeedEvent across services and persistence.
+- FeedEvent ID: database-assigned `FeedEvent.Id` — useful when referencing persisted entities.
+- Stingray ID: `FeedEvent.StingrayId` — the domain entity affected.
+- Action: short text describing the operation, e.g., `FeedEvent.Record.Started`, `FeedEvent.Record.Succeeded`, `FeedEvent.Record.Failed`.
+- Quantity and EventTime — operational data points to help diagnose issues.
+- Exception details on failures (exception type and message) — logged at Error level.
+
+### Success and error paths
+
+- **Success path**: when a feed event is successfully recorded the application emits an `Information` log with the request id, correlation id, persisted feed event id, stingray id, quantity, and timestamp.
+- **Error path**: if saving the feed event fails (e.g., database error) the application emits an `Error` level log with the same contextual fields plus the exception. The controller also logs the error and returns a 500 result.
+
+### Files changed
+
+- `Controllers/FeedingController.cs` — added structured Information and Error logs around the POST path that records feed events.
+- `Services/FeedingService.cs` — added richer Info log on success and Error log on exceptions while saving to the database.
+
+### How to capture evidence
+
+1. Run the app locally (uses console logging by default). Example: `dotnet run` from the project root.
+2. Exercise the recording path (POST to `/api/feeding`) with a JSON body containing `StingrayId`, `FeedBatchId`, `Quantity`, etc. Observe console logs.
+3. To capture success: before the POST, ensure database is available; after the POST you should see an Information log containing `FeedEventId`, `CorrelationId`, `StingrayId` and the RequestId.
+4. To capture an error: temporarily stop the database or alter the connection string to force a persistence failure. POST the same payload and capture the Error level log with exception details and the correlation id.
+
+### Example log (Information):
+
+```
+Recording feed event started. RequestId={RequestId} CorrelationId={CorrelationId} StingrayId=3 Quantity=5
+Recorded feed event completed. RequestId={RequestId} CorrelationId={CorrelationId} FeedEventId=42 StingrayId=3 Quantity=5
+```
+
+### Notes
+
+- Logs are structured (message templates with named properties) so they are compatible with structured logging sinks.
+- The Correlation ID is set when a FeedEvent is created if the caller does not provide one. This keeps logs traceable even when clients omit the field.
+- Add screenshots of console output or your logging system’s query results to this README section when submitting the assignment.
+
 
 

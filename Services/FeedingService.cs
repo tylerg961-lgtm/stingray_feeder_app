@@ -47,9 +47,24 @@ namespace StingrayFeeder.Services
             }
 
             _db.FeedEvents.Add(feedEvent);
-            await _db.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Recorded FeedEvent {FeedEventId} (Stingray {StingrayId})", feedEvent.Id, feedEvent.StingrayId);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+
+                // Domain-level success log (no HttpContext here)
+                _logger.LogInformation("FeedEvent.Record.Succeeded CorrelationId={CorrelationId} FeedEventId={FeedEventId} StingrayId={StingrayId} Quantity={Quantity} EventTime={EventTime}",
+                    feedEvent.CorrelationId, feedEvent.Id, feedEvent.StingrayId, feedEvent.Quantity, feedEvent.EventTime);
+            }
+            catch (Exception ex)
+            {
+                // Domain-level failure log with important fields
+                _logger.LogError(ex, "FeedEvent.Record.Failed CorrelationId={CorrelationId} StingrayId={StingrayId} Quantity={Quantity}",
+                    feedEvent.CorrelationId, feedEvent.StingrayId, feedEvent.Quantity);
+
+                // Re-throw so calling layer (controller) can log request-level info and return an appropriate response
+                throw;
+            }
         }
     }
 }
