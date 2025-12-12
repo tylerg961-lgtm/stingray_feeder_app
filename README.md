@@ -1,4 +1,4 @@
-    # StingrayFeeder — Razor Pages Stingray Feeding & Fish Monitoring (target: .NET 9)
+# StingrayFeeder — Razor Pages Stingray Feeding & Fish Monitoring (target: .NET 9)
 
 StingrayFeeder is a focused Razor Pages web application (targeting `.NET 9`) for managing feeding operations for captive stingrays and monitoring the fish that are fed to them. 
 The app demonstrates domain modeling for animals and feed, separation of concerns via DI, full CRUD for feeding records and fish inventory, diagnostics and health checks for reliable 
@@ -240,6 +240,51 @@ The app calls the stored procedure through EF Core using `FromSqlInterpolated` w
 2. Run the SQL script located at `sql/Create_GetFeedSummary.sql` against the same database. You can use __SQL Server Object Explorer__ inside Visual Studio or open the script in SQL Server Management Studio (SSMS) and execute it.
 
 3. Start the application and navigate to `/Reports/StoredProcedures` in your browser. Set the dates (defaults cover the last 7 days) and click "Run" to see results.
+
+## Week 16 — Azure Deployment
+
+This section documents the steps I used to publish the `stingray_feeder_app` to Azure App Service, how I externalized secrets, and the evidence collected to verify the deployment. The purpose is to demonstrate a repeatable, secure deployment process and provide clear evidence that the app and critical endpoints are accessible.
+
+Deployment steps (high level):
+
+1. Prepare the app for deployment
+   - Ensure the project builds locally and migrations are applied if you plan to run DB migrations at startup in Development. Confirm `Program.cs` contains the health endpoint at `/healthz` and that it uses the configured `ConnectionStrings:DefaultConnection` connection string.
+   - Add a production configuration template `appsettings.Production.json` (this repository contains a placeholder file — DO NOT commit real secrets).
+
+2. Create Azure resources
+   - Create an App Service Plan and App Service (Runtime: .NET 9). Choose a Free tier if acceptable for demos.
+   - Configure the App Service `Configuration` settings: add an Application Setting named `ConnectionStrings__DefaultConnection` with your production SQL connection string, or use the `Connection strings` blade and add a `DefaultConnection` entry (type: SQLAzure). Do not store secrets in the repo.
+
+3. Publish from Visual Studio
+   - In Visual Studio: Right-click the `stingray_feeder_app` project -> Publish -> Azure -> App Service -> Select or create -> Publish. Use the generated publish profile for future deployments or CI.
+   - Alternatively use `dotnet publish` + `az webapp deploy` or zip-deploy if automating from CI.
+
+4. Verify endpoints
+   - Navigate to the public site root: `https://<your-app>.azurewebsites.net/` and confirm a Razor Page renders (for example `/` or `/Caretakers`).
+   - Verify the health endpoint: `https://<your-app>.azurewebsites.net/healthz`.
+     - If `ConnectionStrings__DefaultConnection` is configured and the database is reachable this endpoint should return HTTP 200 and JSON with `status: "Healthy"`.
+     - If the database is not configured or unreachable the endpoint will return HTTP 503 and a short non-sensitive diagnostic message.
+
+Security and configuration notes
+- Do not commit connection strings or secrets to source control. Use `appsettings.Production.json` as a template only. The runtime prefers environment variables and Azure App Service application settings which override the file values.
+- If you need to run EF migrations during deployment, consider running them from a deployment script or from a CI job with an appropriate connection string; avoid running them automatically in production startup unless you understand the operational impact.
+
+Evidence collected (required for assignment):
+- Public Azure App Service URL: `https://<your-app>.azurewebsites.net/` (replace with your app URL).
+- Repo changes: `appsettings.Production.json` (template) and this README `Week 16 — Azure Deployment` section explaining steps and evidence.
+- Screenshots placed under `artifacts/screenshots/`:
+  - `azure-app-config.png` — Azure App Service Configuration page showing `ConnectionStrings__DefaultConnection` (sensitive value redacted in the screenshot).
+  - `healthz-200.png` — Browser showing HTTP 200 and JSON payload from `/healthz` when DB is reachable.
+  - `home-page.png` — Browser screenshot showing a functional Razor Page (root or `/Caretakers`).
+
+Why this demonstrates a secure, repeatable deployment (200+ words):
+
+The Azure deployment approach described here emphasizes separating configuration from code and avoiding committing secrets to the repository. By providing a placeholder `appsettings.Production.json` file and using App Service Application Settings or Connection Strings, credentials are kept in the Azure control plane where access can be audited and rotated independently of the code. Publishing from Visual Studio generates a publish profile that can be reused for ad-hoc deployments; for repeatable automated deployments a CI pipeline (GitHub Actions or Azure DevOps) should be used with secrets stored in the pipeline's secure variable store or a Key Vault reference.
+
+Verification focuses on two key deliverables: an accessible Razor Page to prove the site serves content publicly, and a health endpoint (`/healthz`) that performs a real dependency check against the configured database. The latter provides an operational signal expected by orchestrators and load balancers: HTTP 200 indicates the app instance is healthy and able to reach critical dependencies; HTTP 503 indicates it should be taken out of rotation. The `healthz` response is intentionally minimal and excludes secrets — it returns only a short diagnostic message and elapsed timing to aid operators without leaking sensitive configuration. Together these practices (configuration-as-code templates plus environment-secured secrets and a lightweight operational health check) create a deployment pattern that is secure, auditable, and verifiable.
+
+
+
 
 
 
